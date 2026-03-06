@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BudgetFlow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0e0e11;
+      --surface:    #141417;
+      --panel:      #1a1a1f;
+      --card:       #1e1e24;
+      --border:     #2a2a32;
+      --border-hi:  #3a3a46;
+      --text:       #f0f0f5;
+      --sub:        #9090a0;
+      --faint:      #30303c;
+
+      --gold:       #f5c842;
+      --gold-dim:   #c49e22;
+      --gold-bg:    rgba(245,200,66,0.07);
+      --gold-glow:  rgba(245,200,66,0.18);
+
+      --teal:       #2dd4bf;
+      --red:        #f87060;
+      --blue:       #6da4f5;
+      --violet:     #a98df5;
+
+      --ff:  'Outfit', sans-serif;
+      --fm:  'DM Mono', monospace;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      font-family: var(--ff);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.013) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.013) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #root { position: relative; z-index: 1; height: 100vh; display: flex; flex-direction: column; }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 8px; }
+
+    input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.25; cursor: pointer; }
+    select option { background: var(--panel); color: var(--text); }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideRight {
+      from { transform: translateX(-6px); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes toastPop {
+      0%   { opacity: 0; transform: translateY(-10px) scale(0.96); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--gold-glow); }
+      50%       { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+    }
+    @keyframes barIn {
+      from { width: 0; }
+    }
+    @keyframes spinIn {
+      from { transform: rotate(-90deg) scale(0.8); opacity: 0; }
+      to   { transform: rotate(0) scale(1); opacity: 1; }
+    }
+
+    .fade-up { animation: fadeUp 0.28s cubic-bezier(0.2,0,0,1) both; }
+
+    /* ── Components ── */
+    .glass-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.06) 50%, transparent 90%);
+    }
+
+    .input-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .input-wrap:focus-within {
+      border-color: var(--gold-dim);
+      box-shadow: 0 0 0 3px var(--gold-bg);
+    }
+
+    input, select, textarea {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--ff);
+      font-size: 13px;
+      width: 100%;
+    }
+    input::placeholder { color: var(--sub); }
+
+    .btn-gold {
+      background: var(--gold);
+      color: #0e0e11;
+      border: none;
+      border-radius: 11px;
+      padding: 11px 16px;
+      font-family: var(--ff);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.01em;
+      transition: all 0.17s;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .btn-gold:hover {
+      background: #f8d55a;
+      box-shadow: 0 4px 20px rgba(245,200,66,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-gold:active { transform: translateY(0); box-shadow: none; }
+
+    .btn-ghost {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--sub);
+      border-radius: 9px;
+      padding: 7px 12px;
+      font-family: var(--ff);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.16s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-ghost:hover { border-color: var(--border-hi); color: var(--text); background: var(--faint); }
+
+    .tab-btn {
+      background: none; border: none; font-family: var(--ff);
+      cursor: pointer; padding: 12px 20px 11px;
+      font-size: 13px; font-weight: 500;
+      letter-spacing: 0.01em;
+      transition: color 0.18s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+
+    .stat-tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .stat-tile:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+    .stat-tile::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      border-radius: 0 0 14px 14px;
+    }
+
+    .cal-cell {
+      border-radius: 10px;
+      cursor: pointer;
+      min-height: 52px;
+      padding: 5px 5px 4px;
+      display: flex; flex-direction: column;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      transition: border-color 0.15s, background 0.15s, transform 0.12s;
+      position: relative;
+    }
+    .cal-cell:hover { border-color: var(--border-hi); background: var(--faint); transform: scale(1.03); }
+    .cal-cell.is-today { border-color: rgba(245,200,66,0.4); background: rgba(245,200,66,0.05); }
+    .cal-cell.is-selected { border-color: var(--gold); background: var(--gold-bg); box-shadow: 0 0 0 1px var(--gold); }
+    .cal-cell.has-expenses::after {
+      content: ''; position: absolute; top: 4px; right: 4px;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--gold);
+    }
+
+    .exp-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 11px; padding: 10px 14px;
+      transition: border-color 0.15s;
+      animation: slideRight 0.2s ease both;
+    }
+    .exp-row:hover { border-color: var(--border-hi); }
+
+    .del-btn {
+      background: rgba(248,112,96,0.08);
+      border: 1px solid rgba(248,112,96,0.18);
+      border-radius: 7px; color: var(--red);
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 16px; line-height: 1;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .del-btn:hover { background: rgba(248,112,96,0.18); border-color: rgba(248,112,96,0.4); }
+
+    .cat-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    .progress-track {
+      background: var(--faint); border-radius: 100px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 100px;
+      animation: barIn 0.7s cubic-bezier(0.2,0,0,1);
+    }
+
+    .logo-glyph {
+      width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+      background: linear-gradient(135deg, #c49e22, var(--gold));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px rgba(245,200,66,0.25), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    .selected-day-panel {
+      animation: fadeUp 0.22s ease both;
+      border-top: 1px solid var(--border);
+      margin-top: 14px; padding-top: 14px;
+    }
+
+    .date-highlight-flash {
+      animation: dateFlash 0.4s ease;
+    }
+    @keyframes dateFlash {
+      0%   { box-shadow: 0 0 0 0 var(--gold-glow); }
+      50%  { box-shadow: 0 0 0 8px var(--gold-bg); }
+      100% { box-shadow: 0 0 0 0 transparent; }
+    }
+
+    /* Drag drop zone */
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 12px; padding: 14px;
+      text-align: center; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .drop-zone.drag-over {
+      border-color: var(--gold);
+      background: var(--gold-bg);
+    }
+
+    .section-head {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--sub); margin-bottom: 10px;
+    }
+
+    /* Sidebar form label */
+    .form-label {
+      font-size: 11px; font-weight: 600;
+      color: var(--sub); margin-bottom: 5px;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+var useState = React.useState;
+var useEffect = React.useEffect;
+var useRef = React.useRef;
+
+var CATEGORIES = ["Housing","Food & Groceries","Transportation","Utilities","Healthcare","Entertainment","Personal Care","Savings","Other"];
+var CAT_COLORS = {
+  "Housing":           "#a98df5",
+  "Food & Groceries":  "#2dd4bf",
+  "Transportation":    "#6da4f5",
+  "Utilities":         "#f5c842",
+  "Healthcare":        "#f87060",
+  "Entertainment":     "#f472c0",
+  "Personal Care":     "#5dd8f0",
+  "Savings":           "#4ade80",
+  "Other":             "#7080a0"
+};
+var CAT_ICONS = {
+  "Housing":"🏠","Food & Groceries":"🛒","Transportation":"🚗",
+  "Utilities":"⚡","Healthcare":"💊","Entertainment":"🎬",
+  "Personal Care":"✨","Savings":"🏦","Other":"📦"
+};
+var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+var MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+var DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
+function fmt(n) { return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2}).format(n||0); }
+function fmtShort(n) {
+  var abs = Math.abs(n||0);
+  if(abs>=1000) return (n<0?"-":"")+"$"+(abs/1000).toFixed(1)+"k";
+  return fmt(n);
+}
+function getDIM(y,m){ return new Date(y,m+1,0).getDate(); }
+function getFD(y,m){ return new Date(y,m,1).getDay(); }
+function pad(n){ return String(n).padStart(2,"0"); }
+function toDateStr(y,m,d){ return y+"-"+pad(m+1)+"-"+pad(d); }
+
+function loadExp(){ try{ var r=localStorage.getItem("bf3_exp"); return r?JSON.parse(r):[]; }catch(e){ return []; } }
+function saveExp(e){ try{ localStorage.setItem("bf3_exp",JSON.stringify(e)); }catch(ex){} }
+function loadBud(){ try{ return parseFloat(localStorage.getItem("bf3_bud"))||3000; }catch(e){ return 3000; } }
+function saveBud(b){ try{ localStorage.setItem("bf3_bud",String(b)); }catch(e){} }
+
+/* ─── SVG Charts ─── */
+
+function SparkLine({data, color, height=80}) {
+  var W=460,H=height,PL=34,PR=6,PT=6,PB=18;
+  var vals = data.map(function(d){ return d.total||0; });
+  var maxV = Math.max.apply(null, vals.concat([1]));
+  var pts = vals.map(function(v,i){
+    return [PL+(i/Math.max(vals.length-1,1))*(W-PL-PR), PT+(1-v/maxV)*(H-PT-PB)];
+  });
+  var line = pts.map(function(p){ return p[0]+","+p[1]; }).join(" ");
+  var area = pts.length>0
+    ? "M"+pts[0][0]+","+(H-PB)+" "+pts.map(function(p){ return "L"+p[0]+","+p[1]; }).join(" ")+" L"+pts[pts.length-1][0]+","+(H-PB)+" Z"
+    : "";
+  var ticks = [maxV, Math.round(maxV/2), 0];
+  return (
+    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:H}}>
+      <defs>
+        <linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.01"/>
+        </linearGradient>
+      </defs>
+      {ticks.map(function(v,i){
+        var y=PT+(1-v/maxV)*(H-PT-PB);
+        return <g key={i}>
+          <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+          <text x={PL-3} y={y+4} textAnchor="end" fill="#606070" fontSize="8" fontFamily="var(--fm)">{v>=1000?"$"+(v/1000).toFixed(1)+"k":"$"+v}</text>
+        </g>;
+      })}
+      {[0,7,14,21,29].map(function(i){
+        if(i>=data.length) return null;
+        return <text key={i} x={pts[i][0]} y={H-2} textAnchor="middle" fill="#606070" fontSize="8" fontFamily="var(--ff)">{data[i].label}</text>;
+      })}
+      {area && <path d={area} fill="url(#sg1)"/>}
+      <polyline points={line} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>
+      {pts.map(function(p,i){
+        return vals[i]>0 ? <circle key={i} cx={p[0]} cy={p[1]} r="2.2" fill={color} opacity="0.9"/> : null;
+      })}
+    </svg>
+  );
+}
+
+function BarViz({data, budget}) {
+  var W=460,H=90,PL=38,PR=6,PT=6,PB=18;
+  var maxV = Math.max.apply(null, data.map(function(d){return d.total;}).concat([budget||1,1]));
+  var slotW = (W-PL-PR)/data.length;
+  var bW = slotW*0.3;
+  return (
+    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:H}}>
+      {[0,Math.round(maxV/2),Math.round(maxV)].map(function(v,i){
+        var y=PT+(1-v/maxV)*(H-PT-PB);
+        return <g key={i}>
+          <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+          <text x={PL-3} y={y+4} textAnchor="end" fill="#606070" fontSize="8" fontFamily="var(--fm)">{v>=1000?"$"+(v/1000).toFixed(1)+"k":"$"+v}</text>
+        </g>;
+      })}
+      {data.map(function(d,i){
+        var cx = PL + i*slotW + slotW/2;
+        var bH = Math.max((d.total/maxV)*(H-PT-PB),0);
+        var budH = Math.max(((budget||0)/maxV)*(H-PT-PB),1);
+        var over = d.total > (budget||0);
+        return <g key={i}>
+          <rect x={cx-bW-1} y={H-PB-budH} width={bW} height={budH} fill="rgba(255,255,255,0.06)" rx="3"/>
+          <rect x={cx+1} y={H-PB-bH} width={bW} height={bH} fill={over?"var(--red)":"var(--gold)"} rx="3" opacity="0.85"/>
+          <text x={cx} y={H-3} textAnchor="middle" fill="#606070" fontSize="9" fontFamily="var(--ff)">{d.month}</text>
+        </g>;
+      })}
+    </svg>
+  );
+}
+
+function Donut({data}) {
+  if(!data||!data.length) return (
+    <div style={{height:140,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",fontSize:12,fontStyle:"italic"}}>
+      No data this month
+    </div>
+  );
+  var total = data.reduce(function(s,d){ return s+d.value; },0);
+  var cx=75,cy=75,R=64,ri=40, angle=-Math.PI/2;
+  var slices = data.map(function(d){
+    var sw=(d.value/total)*2*Math.PI;
+    var a1=angle,a2=angle+sw; angle=a2;
+    var x1=cx+R*Math.cos(a1),y1=cy+R*Math.sin(a1);
+    var x2=cx+R*Math.cos(a2),y2=cy+R*Math.sin(a2);
+    var ix1=cx+ri*Math.cos(a1),iy1=cy+ri*Math.sin(a1);
+    var ix2=cx+ri*Math.cos(a2),iy2=cy+ri*Math.sin(a2);
+    var lg=sw>Math.PI?1:0;
+    return {name:d.name,value:d.value,path:"M"+ix1+","+iy1+" L"+x1+","+y1+" A"+R+","+R+" 0 "+lg+",1 "+x2+","+y2+" L"+ix2+","+iy2+" A"+ri+","+ri+" 0 "+lg+",0 "+ix1+","+iy1+" Z"};
+  });
+  return (
+    <div style={{display:"flex",gap:20,alignItems:"center"}}>
+      <svg viewBox="0 0 150 150" style={{width:150,height:150,flexShrink:0}}>
+        {slices.map(function(s,i){
+          return <path key={i} d={s.path} fill={CAT_COLORS[s.name]||"#a98df5"} stroke="var(--card)" strokeWidth="2" opacity="0.9"/>;
+        })}
+        <circle cx={cx} cy={cy} r={ri-1} fill="var(--card)"/>
+        <text x={cx} y={cy-6} textAnchor="middle" fill="var(--text)" fontSize="11" fontWeight="700" fontFamily="var(--fm)">{fmtShort(total)}</text>
+        <text x={cx} y={cy+8} textAnchor="middle" fill="var(--sub)" fontSize="8" fontFamily="var(--ff)">total</text>
+      </svg>
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+        {data.map(function(d){
+          return <div key={d.name} style={{display:"flex",alignItems:"center",gap:7}}>
+            <div className="cat-dot" style={{background:CAT_COLORS[d.name]||"#a98df5"}}/>
+            <span style={{fontSize:11,color:"var(--sub)",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</span>
+            <span style={{fontSize:10.5,fontFamily:"var(--fm)",color:"var(--text)"}}>{fmt(d.value)}</span>
+            <span style={{fontSize:9.5,color:"var(--sub)",minWidth:28,textAlign:"right",fontFamily:"var(--fm)"}}>{((d.value/total)*100).toFixed(0)}%</span>
+          </div>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main App ─── */
+
+function App() {
+  var today = new Date();
+
+  var [expenses, setExpenses]           = useState(function(){ return loadExp(); });
+  var [budget, setBudget]               = useState(function(){ return loadBud(); });
+  var [form, setForm]                   = useState({amount:"",category:"",desc:"",date:today.toISOString().slice(0,10)});
+  var [calYear, setCalYear]             = useState(today.getFullYear());
+  var [calMonth, setCalMonth]           = useState(today.getMonth());
+  var [selectedDay, setSelectedDay]     = useState(null);
+  var [editBudget, setEditBudget]       = useState(false);
+  var [budgetInput, setBudgetInput]     = useState("");
+  var [toast, setToast]                 = useState(null);
+  var [dragOver, setDragOver]           = useState(false);
+  var [importing, setImporting]         = useState(false);
+  var [tab, setTab]                     = useState("budget");
+  var [dateFlash, setDateFlash]         = useState(false);
+  var dateInputRef = useRef(null);
+
+  useEffect(function(){ saveExp(expenses); }, [expenses]);
+  useEffect(function(){ saveBud(budget); }, [budget]);
+
+  function showToast(msg, type) {
+    setToast({msg,type:type||"ok"});
+    setTimeout(function(){ setToast(null); }, 2800);
+  }
+
+  var safeExp = expenses.filter(function(e){ return e && e.date && typeof e.date==="string"; });
+
+  var monthExp = safeExp.filter(function(e){
+    var d=new Date(e.date+"T00:00:00");
+    return d.getFullYear()===calYear && d.getMonth()===calMonth;
+  });
+
+  var totalSpent = monthExp.reduce(function(s,e){ return s+(e.amount||0); },0);
+  var remaining  = budget - totalSpent;
+  var pct        = budget>0 ? Math.min((totalSpent/budget)*100,100) : 0;
+  var pctColor   = pct>90 ? "var(--red)" : pct>70 ? "#f5a742" : "var(--gold)";
+
+  var byDay = {};
+  monthExp.forEach(function(e){
+    var day=new Date(e.date+"T00:00:00").getDate();
+    if(!byDay[day]) byDay[day]=[];
+    byDay[day].push(e);
+  });
+
+  var catTotals = CATEGORIES.map(function(cat){
+    return {cat, total:monthExp.filter(function(e){ return e.category===cat; }).reduce(function(s,e){ return s+(e.amount||0); },0)};
+  }).filter(function(c){ return c.total>0; }).sort(function(a,b){ return b.total-a.total; });
+
+  var last30 = [];
+  for(var i=29;i>=0;i--){
+    var dd=new Date(today); dd.setDate(dd.getDate()-i);
+    var ds=dd.toISOString().slice(0,10);
+    var t=safeExp.filter(function(e){ return e.date===ds; }).reduce(function(s,e){ return s+(e.amount||0); },0);
+    last30.push({label:(dd.getMonth()+1)+"/"+dd.getDate(), total:t});
+  }
+
+  var last6m = [];
+  for(var j=5;j>=0;j--){
+    var md=new Date(today.getFullYear(),today.getMonth()-j,1);
+    var ym=md.getFullYear()+"-"+pad(md.getMonth()+1);
+    var mt=safeExp.filter(function(e){ return e.date.startsWith(ym); }).reduce(function(s,e){ return s+(e.amount||0); },0);
+    last6m.push({month:MONTHS_SHORT[md.getMonth()], total:mt});
+  }
+
+  var pieData = CATEGORIES.map(function(cat){
+    return {name:cat, value:monthExp.filter(function(e){ return e.category===cat; }).reduce(function(s,e){ return s+(e.amount||0); },0)};
+  }).filter(function(c){ return c.value>0; });
+
+  var dIM=getDIM(calYear,calMonth), fD=getFD(calYear,calMonth);
+  var selExp = selectedDay ? (byDay[selectedDay]||[]) : [];
+
+  /* ── Calendar day click: select day AND sync date to form ── */
+  function handleDayClick(day) {
+    var newDate = toDateStr(calYear, calMonth, day);
+    if(selectedDay===day) {
+      setSelectedDay(null);
+    } else {
+      setSelectedDay(day);
+      // Sync date to the Add Expense form
+      setForm(function(f){ return Object.assign({},f,{date:newDate}); });
+      // Flash the date input
+      setDateFlash(true);
+      setTimeout(function(){ setDateFlash(false); }, 600);
+    }
+  }
+
+  function addExpense() {
+    if(!form.amount||!form.category||!form.date){ showToast("Fill amount, category & date","err"); return; }
+    var e={id:Date.now(),amount:parseFloat(form.amount),category:form.category,desc:form.desc,date:form.date};
+    setExpenses(function(p){ return p.concat([e]); });
+    setForm(function(f){ return {amount:"",category:"",desc:"",date:f.date}; });
+    showToast("Expense added");
+  }
+
+  function deleteExpense(id) {
+    setExpenses(function(p){ return p.filter(function(e){ return e.id!==id; }); });
+    showToast("Deleted");
+  }
+
+  function exportToExcel() {
+    var wb=XLSX.utils.book_new();
+    var rows=[["ID","Date","Category","Description","Amount"]];
+    expenses.forEach(function(e){ rows.push([e.id,e.date,e.category,e.desc||"",e.amount]); });
+    var ws=XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"]=[{wch:14},{wch:12},{wch:22},{wch:30},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,"Expenses");
+    var months=[],seen={};
+    expenses.forEach(function(e){ var m=e.date.slice(0,7); if(!seen[m]){seen[m]=1;months.push(m);} });
+    months.sort();
+    var sumRows=[["Month","Total Spent","Budget","Remaining"]];
+    months.forEach(function(m){
+      var t=expenses.filter(function(e){ return e.date.startsWith(m); }).reduce(function(s,e){ return s+e.amount; },0);
+      sumRows.push([m,t,budget,budget-t]);
+    });
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sumRows),"Monthly Summary");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Setting","Value"],["Monthly Budget",budget]]),"Settings");
+    XLSX.writeFile(wb,"BudgetFlow_Data.xlsx");
+    showToast("Excel exported");
+  }
+
+  function importFromExcel(file) {
+    if(!file) return;
+    setImporting(true);
+    file.arrayBuffer().then(function(data){
+      var wb=XLSX.read(data,{type:"array"});
+      var ws=wb.Sheets["Expenses"];
+      if(!ws){ showToast("No 'Expenses' sheet","err"); setImporting(false); return; }
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1}), imported=[];
+      for(var k=1;k<rows.length;k++){
+        var row=rows[k];
+        if(!row[1]||!row[2]||row[4]==null) continue;
+        imported.push({id:row[0]||Date.now()+k, date:String(row[1]).slice(0,10), category:String(row[2]), desc:String(row[3]||""), amount:parseFloat(row[4])||0});
+      }
+      var ws3=wb.Sheets["Settings"];
+      if(ws3){
+        var sr=XLSX.utils.sheet_to_json(ws3,{header:1});
+        sr.forEach(function(r){ if(r[0]==="Monthly Budget") setBudget(parseFloat(r[1])||budget); });
+      }
+      setExpenses(imported);
+      showToast("Imported "+imported.length+" records");
+      setImporting(false);
+    }).catch(function(){ showToast("Import failed","err"); setImporting(false); });
+  }
+
+  /* ─── Render ─── */
+  return (
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{position:"fixed",top:14,right:14,zIndex:9999,animation:"toastPop 0.22s ease"}}>
+          <div style={{
+            background: toast.type==="err" ? "rgba(248,112,96,0.1)" : "rgba(245,200,66,0.08)",
+            border: "1px solid " + (toast.type==="err" ? "rgba(248,112,96,0.3)" : "rgba(245,200,66,0.3)"),
+            color: toast.type==="err" ? "var(--red)" : "var(--gold)",
+            padding:"10px 18px", borderRadius:12, fontSize:13, fontWeight:600,
+            backdropFilter:"blur(20px)", boxShadow:"0 12px 40px rgba(0,0,0,0.5)",
+            display:"flex", alignItems:"center", gap:9
+          }}>
+            <span style={{fontSize:14}}>{toast.type==="err" ? "⚠" : "✦"}</span>
+            {toast.msg}
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ── */}
+      <header style={{
+        background:"var(--surface)", borderBottom:"1px solid var(--border)",
+        padding:"10px 24px", display:"flex", alignItems:"center",
+        justifyContent:"space-between", flexShrink:0
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div className="logo-glyph">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 14 L6 8 L9.5 11 L13 5 L16 8" stroke="#0e0e11" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{fontWeight:800,fontSize:16,letterSpacing:"-0.04em",lineHeight:1}}>BudgetFlow</div>
+            <div style={{fontSize:10,color:"var(--sub)",letterSpacing:"0.02em",marginTop:1}}>Personal Finance Tracker</div>
+          </div>
+          <div style={{
+            marginLeft:4, fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+            background:"var(--gold-bg)", color:"var(--gold)",
+            padding:"3px 10px", borderRadius:20,
+            border:"1px solid rgba(245,200,66,0.22)",
+            display:"flex", alignItems:"center", gap:6
+          }}>
+            <span style={{width:5,height:5,borderRadius:"50%",background:"var(--gold)",display:"inline-block",animation:"pulse 2.2s infinite"}}/>
+            {expenses.length} records
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <label className="btn-ghost" style={{cursor:"pointer"}}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M1 10h10M6 7.5V1M3.5 4.5 6 1.5 8.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Import .xlsx
+            <input type="file" accept=".xlsx" onChange={function(e){ importFromExcel(e.target.files[0]); }} style={{display:"none"}}/>
+          </label>
+          <button className="btn-gold" onClick={exportToExcel} style={{padding:"7px 14px",fontSize:12,borderRadius:9}}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M1 10h10M6 1.5v6M3.5 5 6 8 8.5 5" stroke="#0e0e11" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Export .xlsx
+          </button>
+        </div>
+      </header>
+
+      {/* ── Tabs ── */}
+      <div style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"0 24px",display:"flex",flexShrink:0}}>
+        {[
+          {id:"budget",  label:"Budget & Calendar"},
+          {id:"analytics",label:"Analytics"}
+        ].map(function(t){
+          var active = tab===t.id;
+          return (
+            <button key={t.id} className="tab-btn" onClick={function(){ setTab(t.id); }}
+              style={{
+                color: active ? "var(--text)" : "var(--sub)",
+                borderBottom: "2px solid " + (active ? "var(--gold)" : "transparent"),
+                fontWeight: active ? 600 : 400,
+              }}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ══════════════════════════════ ANALYTICS TAB ══════════════════════════════ */}
+      {tab==="analytics" && (
+        <div style={{flex:1,overflowY:"auto",padding:"22px 24px",background:"var(--bg)"}}>
+          <div style={{marginBottom:22}} className="fade-up">
+            <h1 style={{fontWeight:900,fontSize:24,letterSpacing:"-0.05em",marginBottom:4}}>Analytics</h1>
+            <p style={{fontSize:12.5,color:"var(--sub)"}}>Your spending patterns at a glance</p>
+          </div>
+
+          {/* KPI Strip */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+            {[
+              {label:"30-Day Spend",  val:fmt(last30.reduce(function(s,d){return s+d.total;},0)), color:"var(--red)",    delay:"0ms"},
+              {label:"Daily Average", val:fmt(last30.reduce(function(s,d){return s+d.total;},0)/30), color:"var(--blue)", delay:"60ms"},
+              {label:"Avg Transaction",val:monthExp.length?fmt(totalSpent/monthExp.length):fmt(0), color:"var(--violet)",delay:"120ms"},
+              {label:"Remaining",     val:fmt(remaining), color:remaining>=0?"var(--gold)":"var(--red)", delay:"180ms"}
+            ].map(function(item){
+              return (
+                <div key={item.label} className="stat-tile fade-up" style={{animationDelay:item.delay}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>{item.label}</div>
+                  <div style={{fontFamily:"var(--fm)",fontSize:20,fontWeight:700,color:item.color,letterSpacing:"-0.03em"}}>{item.val}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+            <div className="glass-card" style={{padding:18}}>
+              <div className="section-head">Daily Spending — Last 30 Days</div>
+              <SparkLine data={last30} color="var(--gold)" height={90}/>
+            </div>
+            <div className="glass-card" style={{padding:18}}>
+              <div className="section-head">Monthly vs Budget</div>
+              <BarViz data={last6m} budget={budget}/>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div className="glass-card" style={{padding:18}}>
+              <div className="section-head">Breakdown by Category</div>
+              <Donut data={pieData}/>
+            </div>
+            <div className="glass-card" style={{padding:18}}>
+              <div className="section-head">Top Spending Categories</div>
+              {catTotals.length===0 ? (
+                <div style={{height:130,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--sub)",fontSize:12,fontStyle:"italic"}}>
+                  No expenses this month
+                </div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:11}}>
+                  {catTotals.slice(0,6).map(function(item){
+                    var pct=Math.min((item.total/(catTotals[0].total||1))*100,100);
+                    return (
+                      <div key={item.cat}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                          <span style={{fontSize:11.5,color:"var(--sub)",display:"flex",alignItems:"center",gap:7}}>
+                            <span style={{fontSize:13}}>{CAT_ICONS[item.cat]}</span>
+                            {item.cat}
+                          </span>
+                          <span style={{fontFamily:"var(--fm)",color:"var(--text)",fontSize:11}}>{fmt(item.total)}</span>
+                        </div>
+                        <div className="progress-track" style={{height:4}}>
+                          <div className="progress-fill" style={{width:pct+"%",height:4,background:CAT_COLORS[item.cat]||"#a98df5",opacity:0.85}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════ BUDGET TAB ══════════════════════════════ */}
+      {tab==="budget" && (
+        <div style={{display:"flex",flex:1,overflow:"hidden",background:"var(--bg)"}}>
+
+          {/* ── Left sidebar ── */}
+          <div style={{
+            width:268,minWidth:268,
+            background:"var(--surface)",
+            borderRight:"1px solid var(--border)",
+            padding:"14px 13px",
+            display:"flex",flexDirection:"column",gap:10,
+            overflowY:"auto"
+          }}>
+
+            {/* Budget display */}
+            <div className="glass-card" style={{padding:"14px 15px"}}>
+              <div className="section-head">Monthly Budget</div>
+              {editBudget ? (
+                <div style={{display:"flex",gap:6}}>
+                  <div className="input-wrap" style={{flex:1}}>
+                    <input value={budgetInput} onChange={function(e){ setBudgetInput(e.target.value); }}
+                      style={{padding:"8px 10px",fontFamily:"var(--fm)",fontWeight:700,fontSize:14}}/>
+                  </div>
+                  <button className="btn-gold" style={{padding:"0 12px",borderRadius:9,fontSize:12}}
+                    onClick={function(){ setBudget(parseFloat(budgetInput)||budget); setEditBudget(false); }}>Save</button>
+                  <button className="btn-ghost" style={{padding:"0 9px"}}
+                    onClick={function(){ setEditBudget(false); }}>✕</button>
+                </div>
+              ) : (
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+                  <span style={{fontFamily:"var(--fm)",fontSize:22,fontWeight:700,color:"var(--gold)",letterSpacing:"-0.04em"}}>{fmt(budget)}</span>
+                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 9px"}}
+                    onClick={function(){ setEditBudget(true); setBudgetInput(String(budget)); }}>Edit</button>
+                </div>
+              )}
+            </div>
+
+            {/* Add Expense form */}
+            <div className="glass-card" style={{padding:"14px 15px"}}>
+              <div className="section-head">Add Expense</div>
+              <div style={{display:"flex",flexDirection:"column",gap:9}}>
+
+                <div>
+                  <div className="form-label">Amount</div>
+                  <div className="input-wrap" style={{display:"flex",alignItems:"center"}}>
+                    <span style={{padding:"0 10px",color:"var(--gold)",fontFamily:"var(--fm)",fontWeight:700,fontSize:15,borderRight:"1px solid var(--border)"}}>$</span>
+                    <input type="number" placeholder="0.00" value={form.amount}
+                      onChange={function(e){ setForm(function(f){ return Object.assign({},f,{amount:e.target.value}); }); }}
+                      style={{padding:"9px 10px",fontFamily:"var(--fm)",fontSize:13}}/>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="form-label">Category</div>
+                  <div className="input-wrap">
+                    <select value={form.category}
+                      onChange={function(e){ setForm(function(f){ return Object.assign({},f,{category:e.target.value}); }); }}
+                      style={{padding:"9px 10px",color:form.category?"var(--text)":"var(--sub)"}}>
+                      <option value="">Select category…</option>
+                      {CATEGORIES.map(function(c){ return <option key={c} value={c}>{CAT_ICONS[c]}  {c}</option>; })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date field — flashes gold when synced from calendar */}
+                <div>
+                  <div className="form-label" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span>Date</span>
+                    {dateFlash && (
+                      <span style={{fontSize:9,color:"var(--gold)",fontWeight:700,letterSpacing:"0.05em",animation:"toastPop 0.2s ease"}}>
+                        ✦ synced from calendar
+                      </span>
+                    )}
+                  </div>
+                  <div className="input-wrap" ref={dateInputRef}
+                    style={{
+                      transition:"box-shadow 0.3s, border-color 0.3s",
+                      borderColor: dateFlash ? "var(--gold)" : undefined,
+                      boxShadow: dateFlash ? "0 0 0 3px var(--gold-bg), 0 0 16px var(--gold-glow)" : undefined
+                    }}>
+                    <input type="date" value={form.date}
+                      onChange={function(e){ setForm(function(f){ return Object.assign({},f,{date:e.target.value}); }); }}
+                      style={{padding:"9px 10px"}}/>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="form-label">Description</div>
+                  <div className="input-wrap">
+                    <input placeholder="Optional note…" value={form.desc}
+                      onChange={function(e){ setForm(function(f){ return Object.assign({},f,{desc:e.target.value}); }); }}
+                      onKeyDown={function(e){ if(e.key==="Enter") addExpense(); }}
+                      style={{padding:"9px 10px"}}/>
+                  </div>
+                </div>
+
+                <button className="btn-gold" onClick={addExpense} style={{marginTop:2,padding:"11px"}}>
+                  <span style={{fontSize:15,fontWeight:300}}>+</span> Add Expense
+                </button>
+              </div>
+            </div>
+
+            {/* Drop zone */}
+            <div className={"drop-zone" + (dragOver?" drag-over":"")}
+              onDragOver={function(e){ e.preventDefault(); setDragOver(true); }}
+              onDragLeave={function(){ setDragOver(false); }}
+              onDrop={function(e){ e.preventDefault(); setDragOver(false); var f=e.dataTransfer.files[0]; if(f&&f.name.endsWith(".xlsx")) importFromExcel(f); else showToast("Need an .xlsx file","err"); }}>
+              <div style={{fontSize:22,marginBottom:5}}>📊</div>
+              <div style={{fontSize:11,color:"var(--sub)",fontWeight:500}}>Drop Excel file to import</div>
+            </div>
+
+            {/* Record count */}
+            <div className="glass-card" style={{padding:"12px 15px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div className="section-head" style={{marginBottom:4}}>All Records</div>
+                <div style={{fontFamily:"var(--fm)",fontSize:24,fontWeight:700,color:"var(--blue)",letterSpacing:"-0.04em"}}>{expenses.length}</div>
+              </div>
+              <div style={{fontSize:28,opacity:0.4}}>🗃</div>
+            </div>
+
+            {/* This month mini-breakdown */}
+            {catTotals.length>0 && (
+              <div className="glass-card" style={{padding:"13px 15px"}}>
+                <div className="section-head">This Month</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {catTotals.map(function(item){
+                    return (
+                      <div key={item.cat}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                          <span style={{fontSize:11,color:"var(--sub)",display:"flex",alignItems:"center",gap:6}}>
+                            <span>{CAT_ICONS[item.cat]}</span>{item.cat}
+                          </span>
+                          <span style={{fontFamily:"var(--fm)",fontSize:10.5,color:"var(--text)"}}>{fmt(item.total)}</span>
+                        </div>
+                        <div className="progress-track" style={{height:3}}>
+                          <div className="progress-fill" style={{width:Math.min((item.total/budget)*100,100)+"%",height:3,background:CAT_COLORS[item.cat]||"#a98df5",opacity:0.75}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </div>{/* end sidebar */}
+
+          {/* ── Right panel ── */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflowY:"auto",minWidth:0}}>
+
+            {/* Summary strip */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,padding:"16px 18px 0"}}>
+              {[
+                {label:"Budget",   value:fmt(budget),    color:"var(--violet)"},
+                {label:"Spent",    value:fmt(totalSpent),color:"var(--red)"},
+                {label:"Left",     value:fmt(remaining), color:remaining>=0?"var(--gold)":"var(--red)"}
+              ].map(function(item){
+                return (
+                  <div key={item.label} className="stat-tile">
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--sub)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:9}}>{item.label}</div>
+                    <div style={{fontFamily:"var(--fm)",fontSize:20,fontWeight:700,color:item.color,letterSpacing:"-0.03em"}}>{item.value}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Budget progress */}
+            <div className="glass-card" style={{margin:"12px 18px 0",padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"var(--sub)",marginBottom:9}}>
+                <span>Spent <span style={{color:"var(--text)",fontFamily:"var(--fm)"}}>{fmt(totalSpent)}</span></span>
+                <span>Budget <span style={{color:"var(--text)",fontFamily:"var(--fm)"}}>{fmt(budget)}</span></span>
+              </div>
+              <div className="progress-track" style={{height:8}}>
+                <div className="progress-fill" style={{width:pct+"%",height:8,background:pctColor}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+                <span style={{fontFamily:"var(--fm)",fontSize:11,color:"var(--sub)"}}>{pct.toFixed(1)}% used</span>
+                <span style={{fontSize:11,fontWeight:700,color:remaining>=0?"var(--gold)":"var(--red)"}}>
+                  {remaining>=0 ? "Under budget ✓" : "Over budget!"}
+                </span>
+              </div>
+            </div>
+
+            {/* Calendar */}
+            <div className="glass-card" style={{margin:"12px 18px 18px",padding:"16px 16px 14px",flex:1,display:"flex",flexDirection:"column"}}>
+
+              {/* Calendar header */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                <button className="btn-ghost" style={{width:30,height:30,padding:0,justifyContent:"center",borderRadius:9,fontSize:18}}
+                  onClick={function(){ if(calMonth===0){setCalMonth(11);setCalYear(function(y){return y-1;});}else setCalMonth(function(m){return m-1;}); setSelectedDay(null); }}>‹</button>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontWeight:800,fontSize:15,letterSpacing:"-0.03em"}}>{MONTHS[calMonth]} {calYear}</div>
+                  <div style={{fontSize:10,color:"var(--sub)",marginTop:1}}>Click a day to set expense date</div>
+                </div>
+                <button className="btn-ghost" style={{width:30,height:30,padding:0,justifyContent:"center",borderRadius:9,fontSize:18}}
+                  onClick={function(){ if(calMonth===11){setCalMonth(0);setCalYear(function(y){return y+1;});}else setCalMonth(function(m){return m+1;}); setSelectedDay(null); }}>›</button>
+              </div>
+
+              {/* Day names */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:5}}>
+                {DAYS.map(function(d){
+                  return <div key={d} style={{textAlign:"center",fontSize:9.5,color:"var(--sub)",fontWeight:700,padding:"2px 0",letterSpacing:"0.06em",textTransform:"uppercase"}}>{d}</div>;
+                })}
+              </div>
+
+              {/* Day cells */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+                {Array(fD).fill(null).map(function(_,i){ return <div key={"b"+i}/>; })}
+                {Array(dIM).fill(null).map(function(_,i){
+                  var day=i+1;
+                  var de=byDay[day]||[];
+                  var isToday=today.getDate()===day&&today.getMonth()===calMonth&&today.getFullYear()===calYear;
+                  var isSel=selectedDay===day;
+                  var dt=de.reduce(function(s,e){return s+(e.amount||0);},0);
+                  var cls="cal-cell"+(isToday?" is-today":"")+(isSel?" is-selected":"")+(de.length>0?" has-expenses":"");
+                  return (
+                    <div key={day} className={cls} onClick={function(){ handleDayClick(day); }}>
+                      <div style={{
+                        fontSize:10.5,fontWeight:isToday?800:400,
+                        color:isSel?"var(--gold)":isToday?"var(--gold)":"var(--sub)",
+                        marginBottom:2,lineHeight:1
+                      }}>{day}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:1.5,flex:1}}>
+                        {de.slice(0,2).map(function(e){
+                          return <div key={e.id} style={{
+                            fontSize:7.5,fontWeight:600,
+                            background:(CAT_COLORS[e.category]||"#a98df5")+"1a",
+                            color:CAT_COLORS[e.category]||"#a98df5",
+                            borderRadius:3,padding:"1.5px 3px",
+                            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
+                          }}>{e.desc||e.category}</div>;
+                        })}
+                        {de.length>2 && <div style={{fontSize:7,color:"var(--sub)"}}>+{de.length-2}</div>}
+                      </div>
+                      {dt>0 && <div style={{fontSize:7.5,color:"var(--sub)",marginTop:2,fontFamily:"var(--fm)"}}>{fmtShort(dt)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Selected day detail */}
+              {selectedDay && (
+                <div className="selected-day-panel">
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"var(--gold)",letterSpacing:"-0.01em"}}>
+                      {MONTHS[calMonth]} {selectedDay}
+                    </div>
+                    <div style={{fontSize:11,color:"var(--sub)"}}>
+                      {selExp.length===0 ? "No expenses" : selExp.length+" expense"+(selExp.length>1?"s":"")}
+                      <span style={{marginLeft:8,fontSize:10,color:"var(--gold)",fontWeight:600}}>
+                        ← date set in form
+                      </span>
+                    </div>
+                  </div>
+                  {selExp.length===0 ? (
+                    <div style={{color:"var(--sub)",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>Nothing logged — form date is set, add your first expense!</div>
+                  ) : (
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {selExp.map(function(e){
+                        return (
+                          <div key={e.id} className="exp-row">
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <div className="cat-dot" style={{background:CAT_COLORS[e.category]||"#a98df5"}}/>
+                              <div>
+                                <div style={{fontSize:12.5,fontWeight:600}}>{e.desc||e.category}</div>
+                                <div style={{fontSize:10,color:"var(--sub)",marginTop:1}}>{e.category}</div>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <span style={{fontFamily:"var(--fm)",fontWeight:700,color:"var(--red)",fontSize:13}}>{fmt(e.amount)}</span>
+                              <button className="del-btn" onClick={function(){ deleteExpense(e.id); }}>×</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {monthExp.length===0 && !selectedDay && (
+                <div style={{textAlign:"center",padding:"32px 0",marginTop:"auto"}}>
+                  <div style={{fontSize:36,marginBottom:10,opacity:0.5}}>📅</div>
+                  <div style={{fontWeight:800,fontSize:14,color:"var(--sub)",letterSpacing:"-0.02em",marginBottom:5}}>Start tracking your expenses</div>
+                  <div style={{fontSize:11.5,color:"var(--sub)",opacity:0.7}}>Click a day to set the date, then add an expense</div>
+                </div>
+              )}
+            </div>
+          </div>{/* end right panel */}
+        </div>
+      )}
+
+      {/* Loading overlay */}
+      {importing && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,backdropFilter:"blur(6px)"}}>
+          <div className="glass-card" style={{padding:"32px 48px",textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:12}}>⏳</div>
+            <div style={{fontWeight:700,fontSize:14,letterSpacing:"-0.02em"}}>Importing…</div>
+            <div style={{fontSize:11,color:"var(--sub)",marginTop:5}}>Reading your spreadsheet</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
